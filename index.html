@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>課堂幸運轉盤</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter & Noto Sans TC -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', 'Inter', sans-serif;
+            background-color: #020617;
+            color: #F5F7FA;
+        }
+        /* Custom canvas shadow and styles */
+        #wheelCanvas {
+            filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.4));
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 sm:p-6 lg:p-8">
+
+    <header class="max-w-7xl w-full mx-auto mb-6">
+        <h1 class="text-2xl sm:text-3xl font-bold flex items-center gap-2 text-[#F5F7FA]">
+            <span class="text-[#F0D399]">🎯</span> 課堂抽籤大轉盤
+        </h1>
+        <p class="text-slate-400 text-sm mt-1">輕鬆點名、趣味互動</p>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left Column: 40% width (lg:col-span-5) for name list settings -->
+        <section class="lg:col-span-5 bg-slate-900 p-6 rounded-2xl shadow-xl border border-slate-800 flex flex-col gap-4">
+            <div>
+                <h2 class="text-lg font-bold text-[#F5F7FA] mb-1">轉盤名單管理</h2>
+                <p class="text-xs text-slate-400">可直接貼上 Excel 或整行名單（一行一個名字）</p>
+            </div>
+
+            <!-- Quick Import Presets -->
+            <div class="flex flex-wrap gap-2">
+                <button id="presetClassBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors border border-slate-700">
+                    載入範例名單 (座號)
+                </button>
+                <button id="clearListBtn" class="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 text-xs font-medium rounded-lg transition-colors border border-rose-900/50">
+                    清空名單
+                </button>
+            </div>
+
+            <!-- Textarea for bulk import -->
+            <div class="flex flex-col gap-1">
+                <textarea id="nameInput" rows="10" placeholder="請在此貼上名單，每一行代表一個選項..." class="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-[#F5F7FA] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#F0D399] focus:border-transparent resize-y"></textarea>
+            </div>
+
+            <button id="updateWheelBtn" class="w-full py-3 bg-[#F0D399] hover:bg-amber-200 text-slate-950 font-semibold rounded-xl transition-colors shadow-sm">
+                載入名單 / 更新轉盤內容
+            </button>
+
+            <div class="text-xs text-slate-400 bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                💡 <strong>提示：</strong>每次抽完後名單會自動保留（可重複抽中）。若遇到請假學生，抽到時直接口頭略過即可。
+            </div>
+        </section>
+
+        <!-- Right Column: 60% width (lg:col-span-7) for wheel display -->
+        <section class="lg:col-span-7 flex flex-col items-center bg-slate-900 p-6 rounded-2xl shadow-xl border border-slate-800">
+            <div class="relative w-full max-w-[400px] aspect-square flex items-center justify-center mb-6">
+                <!-- Pointer/Arrow at top -->
+                <div class="absolute -top-3 z-20 w-0 h-0 border-x-[16px] border-x-transparent border-t-[28px] border-t-[#F0D399] filter drop-shadow"></div>
+                
+                <!-- Canvas Wheel -->
+                <canvas id="wheelCanvas" width="400" height="400" class="w-full h-full cursor-pointer"></canvas>
+                
+                <!-- Center Spin Button -->
+                <button id="spinBtn" class="absolute z-10 w-20 h-20 rounded-full bg-gradient-to-tr from-[#F0D399] to-amber-200 text-slate-950 font-bold text-lg shadow-lg hover:scale-105 active:scale-95 transition-transform flex items-center justify-center border-4 border-slate-900">
+                    抽籤
+                </button>
+            </div>
+
+            <!-- Result Display Modal/Banner -->
+            <div id="resultContainer" class="w-full bg-slate-800/80 border border-[#F0D399]/30 rounded-xl p-4 text-center hidden">
+                <p class="text-xs font-semibold text-[#F0D399] uppercase tracking-wider mb-1">抽中結果</p>
+                <div id="resultText" class="text-3xl font-extrabold text-[#F5F7FA] mb-3">--</div>
+                <div class="flex justify-center gap-3">
+                    <button id="skipBtn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg text-sm transition-colors">
+                        略過/重抽
+                    </button>
+                    <button id="confirmResultBtn" class="px-4 py-2 bg-[#F0D399] hover:bg-amber-200 text-slate-950 font-medium rounded-lg text-sm transition-colors">
+                        確認並儲存紀錄
+                    </button>
+                </div>
+            </div>
+
+            <!-- History Log Section -->
+            <div class="w-full mt-6 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-xs font-bold text-[#F0D399] uppercase tracking-wider">歷史抽籤紀錄</h3>
+                    <button id="clearHistoryBtn" class="text-xs text-slate-400 hover:text-rose-400 transition-colors">清除紀錄</button>
+                </div>
+                <div id="historyList" class="max-h-32 overflow-y-auto flex flex-col gap-1.5 text-xs text-slate-300">
+                    <span class="text-slate-600 italic">尚未有抽籤紀錄...</span>
+                </div>
+            </div>
+            
+            <div id="hintText" class="text-sm text-slate-400 mt-2 text-center">
+                點擊中央「抽籤」按鈕或轉盤本身即可開始轉動！
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        const spinBtn = document.getElementById('spinBtn');
+        const updateWheelBtn = document.getElementById('updateWheelBtn');
+        const nameInput = document.getElementById('nameInput');
+        const presetClassBtn = document.getElementById('presetClassBtn');
+        const clearListBtn = document.getElementById('clearListBtn');
+        const resultContainer = document.getElementById('resultContainer');
+        const resultText = document.getElementById('resultText');
+        const skipBtn = document.getElementById('skipBtn');
+        const confirmResultBtn = document.getElementById('confirmResultBtn');
+        const historyList = document.getElementById('historyList');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        const hintText = document.getElementById('hintText');
+
+        // State variables
+        let items = ['1號', '2號', '3號', '4號', '5號', '6號', '7號', '8號', '9號', '10號'];
+        let currentAngle = 0; // Current rotation angle in radians
+        let isSpinning = false;
+        let spinVelocity = 0;
+        let historyRecords = [];
+        let pendingWinningItem = '';
+
+        // Vivid color palette for high visual contrast and excitement
+        const colors = [
+            '#ef4444', '#f97316', '#f59e0b', '#84cc16', 
+            '#10b981', '#06b6d4', '#3b82f6', '#6366f1', 
+            '#a855f7', '#ec4899'
+        ];
+
+        // Initialize textarea with default items
+        function initInput() {
+            nameInput.value = items.join('\n');
+        }
+
+        // Draw the wheel based on current items
+        function drawWheel() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = Math.min(centerX, centerY) - 10;
+
+            ctx.clearRect(0, 0, width, height);
+
+            if (items.length === 0) {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = '#1e293b';
+                ctx.fill();
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '16px Noto Sans TC, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('請輸入名單', centerX, centerY);
+                return;
+            }
+
+            const arcSize = (2 * Math.PI) / items.length;
+
+            for (let i = 0; i < items.length; i++) {
+                const angle = currentAngle + i * arcSize;
+
+                // Draw sector
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, angle, angle + arcSize);
+                ctx.closePath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw text
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(angle + arcSize / 2);
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#F5F7FA';
+                ctx.font = 'bold 14px Noto Sans TC, sans-serif';
+                
+                // Truncate long text if necessary
+                let text = items[i];
+                if (text.length > 8) text = text.substring(0, 7) + '..';
+                
+                ctx.fillText(text, radius - 20, 0);
+                ctx.restore();
+            }
+
+            // Draw outer border ring
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = '#334155';
+            ctx.stroke();
+        }
+
+        // Spin animation logic
+        function startSpin() {
+            if (isSpinning || items.length === 0) return;
+            
+            isSpinning = true;
+            spinBtn.disabled = true;
+
+            // Random initial velocity (radians per frame)
+            spinVelocity = 0.3 + Math.random() * 0.3; 
+            const friction = 0.982; // Deceleration rate
+
+            function animate() {
+                if (!isSpinning) return;
+
+                currentAngle += spinVelocity;
+                spinVelocity *= friction;
+
+                drawWheel();
+
+                // Stop condition
+                if (spinVelocity < 0.002) {
+                    isSpinning = false;
+                    spinBtn.disabled = false;
+                    calculateResult();
+                    return;
+                }
+
+                requestAnimationFrame(animate);
+            }
+
+            animate();
+        }
+
+        // Calculate which item was selected based on final angle
+        function calculateResult() {
+            const arcSize = (2 * Math.PI) / items.length;
+            const pointerOffset = (3 * Math.PI / 2) % (2 * Math.PI);
+            
+            let index = Math.floor(((2 * Math.PI - ((currentAngle + pointerOffset) % (2 * Math.PI))) % (2 * Math.PI)) / arcSize);
+            
+            index = (index + items.length) % items.length;
+            pendingWinningItem = items[index];
+
+            // Display result and keep it retained until dismissed
+            resultText.textContent = pendingWinningItem;
+            resultContainer.classList.remove('hidden');
+        }
+
+        // Render history list
+        function renderHistory() {
+            if (historyRecords.length === 0) {
+                historyList.innerHTML = '<span class="text-slate-600 italic">尚未有抽籤紀錄...</span>';
+                return;
+            }
+
+            historyList.innerHTML = historyRecords.map((record, index) => `
+                <div class="flex justify-between items-center bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+                    <span class="text-slate-400">#${historyRecords.length - index}</span>
+                    <span class="font-bold text-[#F5F7FA]">${record.item}</span>
+                    <span class="text-slate-500 text-[10px]">${record.time}</span>
+                </div>
+            `).join('');
+        }
+
+        // Event Listeners
+        updateWheelBtn.addEventListener('click', () => {
+            const lines = nameInput.value
+                .split('\n')
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+
+            if (lines.length === 0) {
+                return;
+            }
+
+            items = lines;
+            currentAngle = 0;
+            drawWheel();
+            resultContainer.classList.add('hidden');
+        });
+
+        presetClassBtn.addEventListener('click', () => {
+            items = ['1號 學生A', '2號 學生B', '3號 學生C', '4號 學生D', '5號 學生E', '6號 學生F', '7號 學生G', '8號 學生H'];
+            initInput();
+            currentAngle = 0;
+            drawWheel();
+            resultContainer.classList.add('hidden');
+        });
+
+        clearListBtn.addEventListener('click', () => {
+            items = [];
+            nameInput.value = '';
+            drawWheel();
+            resultContainer.classList.add('hidden');
+        });
+
+        spinBtn.addEventListener('click', startSpin);
+        canvas.addEventListener('click', startSpin);
+
+        skipBtn.addEventListener('click', () => {
+            resultContainer.classList.add('hidden');
+            startSpin();
+        });
+
+        confirmResultBtn.addEventListener('click', () => {
+            if (pendingWinningItem) {
+                const now = new Date();
+                const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+                historyRecords.unshift({ item: pendingWinningItem, time: timeStr });
+                renderHistory();
+            }
+            resultContainer.classList.add('hidden');
+        });
+
+        clearHistoryBtn.addEventListener('click', () => {
+            historyRecords = [];
+            renderHistory();
+        });
+
+        // Initial setup on load
+        window.onload = function() {
+            initInput();
+            drawWheel();
+        };
+    </script>
+</body>
+</html>
